@@ -4,7 +4,7 @@ import axios from 'axios';
 async function globalSetup(config: FullConfig) {
   console.log('Global setup: preparing test environment...');
   
-  const backendUrl = 'http://localhost:3001';
+  const backendUrl = 'http://localhost:3333';
   
   // Wait for backend to be ready
   let retries = 30;

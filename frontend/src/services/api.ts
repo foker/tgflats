@@ -3,7 +3,7 @@ import { Listing, ListingFilters, SearchResponse, ListingCluster, MapBounds } fr
 
 // API client configuration
 const api = axios.create({
-  baseURL: import.meta.env.VITE_API_URL || 'http://localhost:3001/api',
+  baseURL: import.meta.env.VITE_API_URL || 'http://localhost:3333/api',
   timeout: 10000,
   headers: {
     'Content-Type': 'application/json',

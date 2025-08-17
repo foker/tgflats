@@ -105,7 +105,7 @@ export default defineConfig({
     },
     {
       command: 'cd ../backend && npm run start:dev',
-      url: 'http://localhost:3001/api/listings',
+      url: 'http://localhost:3333/api/listings',
       reuseExistingServer: true, // Always reuse existing server
       timeout: 120 * 1000,
     }

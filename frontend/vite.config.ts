@@ -1,29 +1,29 @@
 import { defineConfig } from 'vite'
 import react from '@vitejs/plugin-react'
-import { visualizer } from 'rollup-plugin-visualizer'
-import { compression } from 'vite-plugin-compression2'
+// import { visualizer } from 'rollup-plugin-visualizer'
+// import { compression } from 'vite-plugin-compression2'
 
 // https://vite.dev/config/
 export default defineConfig({
   plugins: [
     react(),
     // Bundle analyzer
-    visualizer({
-      filename: './dist/stats.html',
-      open: false,
-      gzipSize: true,
-      brotliSize: true,
-    }),
-    // Gzip compression
-    compression({
-      algorithm: 'gzip',
-      ext: '.gz',
-    }),
-    // Brotli compression
-    compression({
-      algorithm: 'brotliCompress',
-      ext: '.br',
-    }),
+    // visualizer({
+    //   filename: './dist/stats.html',
+    //   open: false,
+    //   gzipSize: true,
+    //   brotliSize: true,
+    // }),
+    // // Gzip compression
+    // compression({
+    //   algorithm: 'gzip',
+    //   ext: '.gz',
+    // }),
+    // // Brotli compression
+    // compression({
+    //   algorithm: 'brotliCompress',
+    //   ext: '.br',
+    // }),
   ],
   server: {
     host: '0.0.0.0',

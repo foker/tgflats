@@ -31,19 +31,23 @@ model TelegramPost {
   channelId       String   @map("channel_id")
   channelUsername String   @map("channel_username")
   messageId       BigInt   @map("message_id")
-  text            String?
+  text            String?  @db.Text
   photos          String[] @default([])
   imageUrls       String[] @default([]) @map("image_urls")
+  videoUrls       String[] @default([]) @map("video_urls")
+  hiddenUrls      Json[]   @default([]) @map("hidden_urls") // Links from Apify
   postDate        DateTime @default(now()) @map("post_date")
-  views           Int?     
+  views           String?  // Views as string from Apify (can be "10K" etc)
+  viewsCount      Int?     @map("views_count") // Parsed numeric views
   forwards        Int?
+  link            String?  // Direct link to post
   createdAt       DateTime @default(now()) @map("created_at")
   updatedAt       DateTime @updatedAt @map("updated_at")
   rawData         Json?    @map("raw_data")
   processed       Boolean  @default(false)
 
   // Relations
-  channel  TelegramChannel @relation(fields: [channelId], references: [channelId])
+  channel  TelegramChannel? @relation(fields: [channelId], references: [channelId])
   listings Listing[]
 
   @@unique([messageId, channelUsername])

@@ -87,8 +87,9 @@ export const ListingCard: React.FC<ListingCardProps> = ({
   };
 
   // Generate placeholder images if none provided
+  const displayTitle = title || 'Property';
   const displayImages = images.length > 0 ? images : [
-    `https://via.placeholder.com/400x300/E2E8F0/475569?text=${encodeURIComponent(title.slice(0, 20))}`
+    `https://via.placeholder.com/400x300/E2E8F0/475569?text=${encodeURIComponent(displayTitle.slice(0, 20))}`
   ];
 
   return (
@@ -133,7 +134,7 @@ export const ListingCard: React.FC<ListingCardProps> = ({
         {/* Price Overlay */}
         <div className="absolute bottom-0 left-0 right-0 bg-gradient-to-t from-black/70 to-transparent p-4">
           <div className="text-white">
-            <p className="text-2xl font-bold">{price.toLocaleString()} ₾</p>
+            <p className="text-2xl font-bold">{price ? price.toLocaleString() : 'Price TBD'} ₾</p>
             {pricePerM2 && (
               <p className="text-sm opacity-90">{pricePerM2.toLocaleString()} ₾/m²</p>
             )}
@@ -146,13 +147,13 @@ export const ListingCard: React.FC<ListingCardProps> = ({
         {/* Title and Location */}
         <Link to={`/listing/${id}`} className="block mb-3">
           <h3 className="text-lg font-semibold text-gray-800 hover:text-blue-600 transition-colors line-clamp-2">
-            {title}
+            {displayTitle}
           </h3>
         </Link>
 
         <div className="flex items-center text-gray-600 mb-4">
           <FiMapPin className="mr-2 text-blue-500" />
-          <span className="text-sm">{district}</span>
+          <span className="text-sm">{district || 'Tbilisi'}</span>
           {address && <span className="text-sm text-gray-500 ml-2">• {address}</span>}
         </div>
 
@@ -176,9 +177,9 @@ export const ListingCard: React.FC<ListingCardProps> = ({
         </div>
 
         {/* Amenities */}
-        {amenities.length > 0 && (
+        {amenities && amenities.length > 0 && (
           <div className="flex flex-wrap gap-2 mb-4">
-            {amenities.slice(0, 3).map((amenity, index) => (
+            {(amenities || []).slice(0, 3).map((amenity, index) => (
               <span
                 key={index}
                 className="px-2 py-1 bg-gray-100 text-gray-600 text-xs rounded-full"

@@ -126,3 +126,10 @@ prisma/dev.db*
 # OS
 .DS_Store
 Thumbs.db
+
+# Data files - too large for git
+data/apify-datasets/
+*.png
+*.webm
+playwright-report/
+test-results/

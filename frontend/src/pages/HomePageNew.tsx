@@ -250,19 +250,19 @@ export const HomePageNew: React.FC = () => {
               <ListingCard
                 key={listing.id}
                 id={listing.id}
-                title={listing.title}
-                price={listing.price}
+                title={listing.title || `${listing.bedrooms || 0} bedroom apartment`}
+                price={listing.price || listing.priceMin}
                 pricePerM2={listing.pricePerM2}
                 district={listing.district}
                 address={listing.address}
-                rooms={listing.rooms}
-                area={listing.area}
+                rooms={listing.bedrooms || listing.rooms}
+                area={listing.areaSqm || listing.area}
                 floor={listing.floor}
                 totalFloors={listing.totalFloors}
                 description={listing.description}
-                images={listing.images}
-                amenities={listing.amenities}
-                phoneNumber={listing.phoneNumber}
+                images={listing.imageUrls || listing.images || []}
+                amenities={listing.amenities || []}
+                phoneNumber={listing.phoneNumber || listing.contactInfo}
                 telegramUsername={listing.telegramUsername}
                 createdAt={listing.createdAt}
                 isNew={listing.isNew}
