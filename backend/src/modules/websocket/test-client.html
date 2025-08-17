@@ -1,0 +1,395 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>TBI-Prop WebSocket Test Client</title>
+    <script src="https://cdn.socket.io/4.7.2/socket.io.min.js"></script>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            max-width: 1200px;
+            margin: 0 auto;
+            padding: 20px;
+            background: #f5f5f5;
+        }
+        .container {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 20px;
+        }
+        .panel {
+            background: white;
+            border-radius: 8px;
+            padding: 20px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+        }
+        .status {
+            padding: 10px;
+            border-radius: 4px;
+            margin-bottom: 20px;
+            font-weight: bold;
+        }
+        .connected {
+            background: #d4edda;
+            color: #155724;
+        }
+        .disconnected {
+            background: #f8d7da;
+            color: #721c24;
+        }
+        .controls {
+            margin-bottom: 20px;
+        }
+        button {
+            background: #007bff;
+            color: white;
+            border: none;
+            padding: 10px 20px;
+            border-radius: 4px;
+            cursor: pointer;
+            margin-right: 10px;
+            margin-bottom: 10px;
+        }
+        button:hover {
+            background: #0056b3;
+        }
+        button:disabled {
+            background: #ccc;
+            cursor: not-allowed;
+        }
+        input, select {
+            padding: 8px;
+            margin: 5px;
+            border: 1px solid #ddd;
+            border-radius: 4px;
+            width: 200px;
+        }
+        .message-log {
+            background: #f8f9fa;
+            border: 1px solid #dee2e6;
+            border-radius: 4px;
+            padding: 10px;
+            height: 400px;
+            overflow-y: auto;
+            font-family: monospace;
+            font-size: 12px;
+        }
+        .message {
+            margin-bottom: 10px;
+            padding: 5px;
+            border-left: 3px solid #007bff;
+            background: white;
+        }
+        .message.error {
+            border-left-color: #dc3545;
+        }
+        .message.success {
+            border-left-color: #28a745;
+        }
+        .subscription-list {
+            list-style: none;
+            padding: 0;
+        }
+        .subscription-item {
+            background: #f8f9fa;
+            padding: 10px;
+            margin-bottom: 10px;
+            border-radius: 4px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+        .filter-form {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 10px;
+        }
+        .filter-form label {
+            display: flex;
+            flex-direction: column;
+            font-size: 14px;
+        }
+        h2 {
+            color: #333;
+            border-bottom: 2px solid #007bff;
+            padding-bottom: 10px;
+        }
+    </style>
+</head>
+<body>
+    <h1>TBI-Prop WebSocket Test Client</h1>
+    
+    <div class="status disconnected" id="status">
+        Disconnected
+    </div>
+
+    <div class="controls">
+        <button id="connectBtn">Connect</button>
+        <button id="disconnectBtn" disabled>Disconnect</button>
+        <button id="clearLogBtn">Clear Log</button>
+        <button id="getStatsBtn" disabled>Get Stats</button>
+    </div>
+
+    <div class="container">
+        <div class="panel">
+            <h2>Create Subscription</h2>
+            <form id="subscriptionForm" class="filter-form">
+                <label>
+                    District:
+                    <input type="text" name="district" placeholder="e.g., Seminyak">
+                </label>
+                <label>
+                    Price Min ($):
+                    <input type="number" name="priceMin" placeholder="e.g., 500">
+                </label>
+                <label>
+                    Price Max ($):
+                    <input type="number" name="priceMax" placeholder="e.g., 2000">
+                </label>
+                <label>
+                    Currency:
+                    <select name="currency">
+                        <option value="">Any</option>
+                        <option value="USD">USD</option>
+                        <option value="IDR">IDR</option>
+                        <option value="EUR">EUR</option>
+                    </select>
+                </label>
+                <label>
+                    Bedrooms Min:
+                    <input type="number" name="bedroomsMin" min="0" max="10">
+                </label>
+                <label>
+                    Bedrooms Max:
+                    <input type="number" name="bedroomsMax" min="0" max="10">
+                </label>
+                <label>
+                    Furnished:
+                    <select name="furnished">
+                        <option value="">Any</option>
+                        <option value="true">Yes</option>
+                        <option value="false">No</option>
+                    </select>
+                </label>
+                <label>
+                    Pets Allowed:
+                    <select name="petsAllowed">
+                        <option value="">Any</option>
+                        <option value="true">Yes</option>
+                        <option value="false">No</option>
+                    </select>
+                </label>
+            </form>
+            <button id="subscribeBtn" disabled style="margin-top: 10px; width: 100%;">Subscribe</button>
+
+            <h3>Active Subscriptions</h3>
+            <ul id="subscriptionList" class="subscription-list"></ul>
+            <button id="unsubscribeAllBtn" disabled>Unsubscribe All</button>
+            <button id="getSubscriptionsBtn" disabled>Refresh Subscriptions</button>
+        </div>
+
+        <div class="panel">
+            <h2>Message Log</h2>
+            <div id="messageLog" class="message-log"></div>
+        </div>
+    </div>
+
+    <script>
+        let socket = null;
+        let subscriptions = new Map();
+        
+        const statusEl = document.getElementById('status');
+        const connectBtn = document.getElementById('connectBtn');
+        const disconnectBtn = document.getElementById('disconnectBtn');
+        const subscribeBtn = document.getElementById('subscribeBtn');
+        const unsubscribeAllBtn = document.getElementById('unsubscribeAllBtn');
+        const getSubscriptionsBtn = document.getElementById('getSubscriptionsBtn');
+        const getStatsBtn = document.getElementById('getStatsBtn');
+        const clearLogBtn = document.getElementById('clearLogBtn');
+        const messageLog = document.getElementById('messageLog');
+        const subscriptionList = document.getElementById('subscriptionList');
+        const subscriptionForm = document.getElementById('subscriptionForm');
+
+        function updateStatus(connected) {
+            if (connected) {
+                statusEl.textContent = 'Connected';
+                statusEl.className = 'status connected';
+                connectBtn.disabled = true;
+                disconnectBtn.disabled = false;
+                subscribeBtn.disabled = false;
+                unsubscribeAllBtn.disabled = false;
+                getSubscriptionsBtn.disabled = false;
+                getStatsBtn.disabled = false;
+            } else {
+                statusEl.textContent = 'Disconnected';
+                statusEl.className = 'status disconnected';
+                connectBtn.disabled = false;
+                disconnectBtn.disabled = true;
+                subscribeBtn.disabled = true;
+                unsubscribeAllBtn.disabled = true;
+                getSubscriptionsBtn.disabled = true;
+                getStatsBtn.disabled = true;
+            }
+        }
+
+        function logMessage(message, type = 'info') {
+            const messageEl = document.createElement('div');
+            messageEl.className = `message ${type}`;
+            const timestamp = new Date().toLocaleTimeString();
+            messageEl.innerHTML = `<strong>[${timestamp}]</strong> ${JSON.stringify(message, null, 2)}`;
+            messageLog.appendChild(messageEl);
+            messageLog.scrollTop = messageLog.scrollHeight;
+        }
+
+        function updateSubscriptionList() {
+            subscriptionList.innerHTML = '';
+            subscriptions.forEach((filters, id) => {
+                const li = document.createElement('li');
+                li.className = 'subscription-item';
+                li.innerHTML = `
+                    <div>
+                        <strong>ID:</strong> ${id.substring(0, 8)}...<br>
+                        <strong>Filters:</strong> ${JSON.stringify(filters, null, 2)}
+                    </div>
+                    <button onclick="unsubscribe('${id}')">Unsubscribe</button>
+                `;
+                subscriptionList.appendChild(li);
+            });
+        }
+
+        function connect() {
+            socket = io('http://localhost:3001', {
+                transports: ['websocket', 'polling'],
+                reconnection: true,
+            });
+
+            socket.on('connect', () => {
+                logMessage('Connected to server', 'success');
+                updateStatus(true);
+            });
+
+            socket.on('disconnect', () => {
+                logMessage('Disconnected from server', 'error');
+                updateStatus(false);
+                subscriptions.clear();
+                updateSubscriptionList();
+            });
+
+            socket.on('connected', (data) => {
+                logMessage({ event: 'connected', data }, 'success');
+            });
+
+            socket.on('subscriptionConfirmed', (data) => {
+                logMessage({ event: 'subscriptionConfirmed', data }, 'success');
+                subscriptions.set(data.subscriptionId, data.filters);
+                updateSubscriptionList();
+            });
+
+            socket.on('subscriptionRemoved', (data) => {
+                logMessage({ event: 'subscriptionRemoved', data }, 'success');
+                subscriptions.delete(data.subscriptionId);
+                updateSubscriptionList();
+            });
+
+            socket.on('allSubscriptionsRemoved', (data) => {
+                logMessage({ event: 'allSubscriptionsRemoved', data }, 'success');
+                subscriptions.clear();
+                updateSubscriptionList();
+            });
+
+            socket.on('subscriptions', (data) => {
+                logMessage({ event: 'subscriptions', data }, 'info');
+                subscriptions.clear();
+                data.subscriptions.forEach(sub => {
+                    subscriptions.set(sub.subscriptionId, sub);
+                });
+                updateSubscriptionList();
+            });
+
+            socket.on('newListing', (data) => {
+                logMessage({ event: 'newListing', data }, 'success');
+            });
+
+            socket.on('listingUpdate', (data) => {
+                logMessage({ event: 'listingUpdate', data }, 'info');
+            });
+
+            socket.on('error', (data) => {
+                logMessage({ event: 'error', data }, 'error');
+            });
+
+            socket.on('heartbeat', (data) => {
+                socket.emit('pong');
+            });
+        }
+
+        function disconnect() {
+            if (socket) {
+                socket.disconnect();
+                socket = null;
+            }
+        }
+
+        function subscribe() {
+            const formData = new FormData(subscriptionForm);
+            const filters = {};
+            
+            for (const [key, value] of formData.entries()) {
+                if (value) {
+                    if (key === 'priceMin' || key === 'priceMax' || key === 'bedroomsMin' || key === 'bedroomsMax') {
+                        filters[key] = Number(value);
+                    } else if (key === 'furnished' || key === 'petsAllowed') {
+                        filters[key] = value === 'true';
+                    } else {
+                        filters[key] = value;
+                    }
+                }
+            }
+
+            socket.emit('subscribe', filters);
+            logMessage({ action: 'subscribe', filters }, 'info');
+        }
+
+        function unsubscribe(subscriptionId) {
+            socket.emit('unsubscribe', { subscriptionId });
+            logMessage({ action: 'unsubscribe', subscriptionId }, 'info');
+        }
+
+        function unsubscribeAll() {
+            socket.emit('unsubscribeAll');
+            logMessage({ action: 'unsubscribeAll' }, 'info');
+        }
+
+        function getSubscriptions() {
+            socket.emit('getSubscriptions');
+            logMessage({ action: 'getSubscriptions' }, 'info');
+        }
+
+        function getStats() {
+            fetch('http://localhost:3001/api/websocket/stats')
+                .then(res => res.json())
+                .then(data => {
+                    logMessage({ event: 'stats', data }, 'info');
+                })
+                .catch(err => {
+                    logMessage({ event: 'stats_error', error: err.message }, 'error');
+                });
+        }
+
+        // Event listeners
+        connectBtn.addEventListener('click', connect);
+        disconnectBtn.addEventListener('click', disconnect);
+        subscribeBtn.addEventListener('click', subscribe);
+        unsubscribeAllBtn.addEventListener('click', unsubscribeAll);
+        getSubscriptionsBtn.addEventListener('click', getSubscriptions);
+        getStatsBtn.addEventListener('click', getStats);
+        clearLogBtn.addEventListener('click', () => {
+            messageLog.innerHTML = '';
+        });
+
+        // Make unsubscribe function global for inline onclick
+        window.unsubscribe = unsubscribe;
+    </script>
+</body>
+</html>

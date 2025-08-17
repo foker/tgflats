@@ -1,0 +1,81 @@
+config:
+  target: "http://localhost:3001"
+  phases:
+    - duration: 60
+      arrivalRate: 10
+      name: "Warm up"
+    - duration: 120
+      arrivalRate: 50
+      name: "Ramp up load"
+    - duration: 300
+      arrivalRate: 100
+      name: "Sustained load"
+  defaults:
+    headers:
+      Content-Type: "application/json"
+  processor: "./artillery-processor.js"
+  plugins:
+    expect: {}
+    metrics-by-endpoint: {}
+  
+scenarios:
+  - name: "Browse Listings"
+    weight: 40
+    flow:
+      - get:
+          url: "/api/listings"
+          expect:
+            - statusCode: 200
+            - hasProperty: "data"
+            - hasProperty: "meta"
+          capture:
+            - json: "$.data[0].id"
+              as: "listingId"
+      
+      - think: 2
+      
+      - get:
+          url: "/api/listings/{{ listingId }}"
+          expect:
+            - statusCode: 200
+            - hasProperty: "id"
+  
+  - name: "Search and Filter"
+    weight: 30
+    flow:
+      - get:
+          url: "/api/listings?district=Saburtalo&priceMin=500&priceMax=1500"
+          expect:
+            - statusCode: 200
+      
+      - think: 1
+      
+      - get:
+          url: "/api/listings?bedrooms=2&furnished=true"
+          expect:
+            - statusCode: 200
+  
+  - name: "Map Clustering"
+    weight: 20
+    flow:
+      - post:
+          url: "/api/listings/clusters"
+          json:
+            bounds:
+              swLat: 41.6938
+              swLng: 44.7470
+              neLat: 41.7323
+              neLng: 44.8270
+            zoom: 12
+          expect:
+            - statusCode: 200
+            - hasProperty: "clusters"
+  
+  - name: "Health Check"
+    weight: 10
+    flow:
+      - get:
+          url: "/api/health"
+          expect:
+            - statusCode: 200
+            - hasProperty: "status"

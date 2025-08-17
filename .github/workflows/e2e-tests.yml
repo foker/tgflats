@@ -1,0 +1,186 @@
+name: E2E Tests
+
+on:
+  push:
+    branches: [ main, develop ]
+  pull_request:
+    branches: [ main, develop ]
+  workflow_dispatch:
+
+jobs:
+  e2e-tests:
+    runs-on: ubuntu-latest
+    
+    services:
+      postgres:
+        image: postgres:15
+        env:
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_DB: tbi_prop_test
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+        ports:
+          - 5432:5432
+      
+      redis:
+        image: redis:7
+        options: >-
+          --health-cmd "redis-cli ping"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+        ports:
+          - 6379:6379
+
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+
+    - name: Setup Node.js
+      uses: actions/setup-node@v4
+      with:
+        node-version: '20'
+        cache: 'npm'
+
+    - name: Install backend dependencies
+      working-directory: ./backend
+      run: npm ci
+
+    - name: Install frontend dependencies
+      working-directory: ./frontend
+      run: npm ci
+
+    - name: Install Playwright browsers
+      working-directory: ./frontend
+      run: npx playwright install --with-deps
+
+    - name: Setup backend environment
+      working-directory: ./backend
+      run: |
+        cat > .env << EOF
+        DATABASE_URL="postgresql://postgres:postgres@localhost:5432/tbi_prop_test"
+        REDIS_URL="redis://localhost:6379"
+        PORT=3001
+        NODE_ENV=test
+        JWT_SECRET=test-secret-key
+        OPENAI_API_KEY=${{ secrets.OPENAI_API_KEY || 'test-key' }}
+        TELEGRAM_BOT_TOKEN=${{ secrets.TELEGRAM_BOT_TOKEN || 'test-token' }}
+        GOOGLE_MAPS_API_KEY=${{ secrets.GOOGLE_MAPS_API_KEY || 'test-key' }}
+        EOF
+
+    - name: Run database migrations
+      working-directory: ./backend
+      run: npx prisma migrate deploy
+
+    - name: Seed test data
+      working-directory: ./backend
+      run: npx prisma db seed
+
+    - name: Start backend server
+      working-directory: ./backend
+      run: |
+        npm run start:dev &
+        sleep 10
+        curl -f http://localhost:3001/health || exit 1
+
+    - name: Run E2E tests
+      working-directory: ./frontend
+      run: npm run e2e:ci
+      env:
+        CI: true
+
+    - name: Upload test results
+      if: always()
+      uses: actions/upload-artifact@v4
+      with:
+        name: playwright-report
+        path: frontend/playwright-report/
+        retention-days: 30
+
+    - name: Upload test videos
+      if: failure()
+      uses: actions/upload-artifact@v4
+      with:
+        name: test-videos
+        path: frontend/test-results/
+        retention-days: 7
+
+    - name: Publish test results
+      if: always()
+      uses: dorny/test-reporter@v1
+      with:
+        name: E2E Test Results
+        path: frontend/test-results/junit.xml
+        reporter: java-junit
+
+  performance-tests:
+    runs-on: ubuntu-latest
+    needs: e2e-tests
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+
+    - name: Setup Node.js
+      uses: actions/setup-node@v4
+      with:
+        node-version: '20'
+        cache: 'npm'
+
+    - name: Install dependencies
+      run: |
+        cd frontend && npm ci
+        npx playwright install --with-deps chromium
+
+    - name: Run performance tests
+      working-directory: ./frontend
+      run: |
+        cat > e2e/performance.spec.ts << 'EOF'
+        import { test, expect } from '@playwright/test';
+
+        test.describe('Performance Metrics', () => {
+          test('should load homepage within acceptable time', async ({ page }) => {
+            const startTime = Date.now();
+            await page.goto('http://localhost:5173');
+            await page.waitForLoadState('networkidle');
+            const loadTime = Date.now() - startTime;
+            
+            expect(loadTime).toBeLessThan(3000);
+            
+            const metrics = await page.evaluate(() => {
+              const perf = performance.getEntriesByType('navigation')[0] as PerformanceNavigationTiming;
+              return {
+                domContentLoaded: perf.domContentLoadedEventEnd - perf.domContentLoadedEventStart,
+                loadComplete: perf.loadEventEnd - perf.loadEventStart
+              };
+            });
+            
+            expect(metrics.domContentLoaded).toBeLessThan(1500);
+            expect(metrics.loadComplete).toBeLessThan(2500);
+          });
+        });
+        EOF
+        
+        npm run e2e performance.spec.ts
+
+    - name: Comment PR with results
+      if: github.event_name == 'pull_request'
+      uses: actions/github-script@v7
+      with:
+        script: |
+          const fs = require('fs');
+          const reportPath = 'frontend/playwright-report/index.html';
+          
+          if (fs.existsSync(reportPath)) {
+            github.rest.issues.createComment({
+              issue_number: context.issue.number,
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              body: '## E2E Test Results ✅\n\nAll tests passed! View the full report in the artifacts.'
+            });
+          }

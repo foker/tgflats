@@ -1,0 +1,35 @@
+### Test AI Usage Stats (all time)
+GET http://localhost:3000/api/ai-usage/stats
+Accept: application/json
+
+### Test AI Usage Stats (with date range)
+GET http://localhost:3000/api/ai-usage/stats?startDate=2025-01-01&endDate=2025-12-31
+Accept: application/json
+
+### Test AI Usage Cost Details
+GET http://localhost:3000/api/ai-usage/costs?limit=10&offset=0
+Accept: application/json
+
+### Test AI Usage Cost Details (filtered by provider)
+GET http://localhost:3000/api/ai-usage/costs?provider=openai&model=gpt-3.5-turbo&limit=10
+Accept: application/json
+
+### Test Monthly Spending
+GET http://localhost:3000/api/ai-usage/monthly
+Accept: application/json
+
+### Test Cost Estimate
+GET http://localhost:3000/api/ai-usage/estimate?provider=openai&model=gpt-3.5-turbo&text=Hello world, this is a test text for token counting&estimatedOutputTokens=100
+Accept: application/json
+
+### Test Get Model Pricing
+GET http://localhost:3000/api/ai-usage/models
+Accept: application/json
+
+### Test AI Analysis with tracking
+POST http://localhost:3000/api/ai-analysis/analyze
+Content-Type: application/json
+
+{
+  "text": "Сдается 2-комнатная квартира в Ваке, 60 кв.м., с мебелью и техникой. Цена 800 долларов в месяц. Контакт: +995555123456"
+}

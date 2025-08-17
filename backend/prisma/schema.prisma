@@ -1,0 +1,215 @@
+// Prisma schema file
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// Telegram channel configuration
+model TelegramChannel {
+  id          String   @id @default(uuid())
+  channelId   String   @unique @map("channel_id")
+  username    String?  @unique
+  title       String
+  isActive    Boolean  @default(true) @map("is_active")
+  lastParsed  DateTime? @map("last_parsed")
+  createdAt   DateTime @default(now()) @map("created_at")
+  updatedAt   DateTime @updatedAt @map("updated_at")
+
+  // Relations
+  posts TelegramPost[]
+
+  @@map("telegram_channels")
+}
+
+// Telegram post entity for storing raw telegram data
+model TelegramPost {
+  id              String   @id @default(uuid())
+  channelId       String   @map("channel_id")
+  channelUsername String   @map("channel_username")
+  messageId       BigInt   @map("message_id")
+  text            String?
+  photos          String[] @default([])
+  imageUrls       String[] @default([]) @map("image_urls")
+  postDate        DateTime @default(now()) @map("post_date")
+  views           Int?     
+  forwards        Int?
+  createdAt       DateTime @default(now()) @map("created_at")
+  updatedAt       DateTime @updatedAt @map("updated_at")
+  rawData         Json?    @map("raw_data")
+  processed       Boolean  @default(false)
+
+  // Relations
+  channel  TelegramChannel @relation(fields: [channelId], references: [channelId])
+  listings Listing[]
+
+  @@unique([messageId, channelUsername])
+  @@index([processed])
+  @@index([createdAt])
+  @@index([channelUsername])
+  @@index([postDate])
+  @@map("telegram_posts")
+}
+
+// Main listing entity for processed property data
+model Listing {
+  id             String                                    @id @default(uuid())
+  telegramPostId String?                                   @map("telegram_post_id")
+  district       String?
+  address        String?
+  // Note: We can add PostGIS geography type later when needed
+  latitude       Float?                                    // Keep for legacy and search convenience
+  longitude      Float?                                    // Keep for legacy and search convenience
+  price          Float?
+  priceMin       Float?                                    @map("price_min")
+  priceMax       Float?                                    @map("price_max")
+  currency       String                                    @default("GEL")
+  bedrooms       Int?
+  areaSqm        Float?                                    @map("area_sqm")
+  petsAllowed    Boolean?                                  @map("pets_allowed")
+  furnished      Boolean?
+  amenities      String[]                                  @default([])
+  description    String?
+  contactInfo    String?                                   @map("contact_info")
+  sourceUrl      String?                                   @map("source_url")
+  imageUrls      String[]                                  @default([]) @map("image_urls")
+  status         ListingStatus                             @default(ACTIVE)
+  confidence     Float?                                    // AI confidence score for extracted data
+  createdAt      DateTime                                  @default(now()) @map("created_at")
+  updatedAt      DateTime                                  @updatedAt @map("updated_at")
+
+  // Relations
+  telegramPost TelegramPost? @relation(fields: [telegramPostId], references: [id])
+
+  @@index([district])
+  @@index([price])
+  @@index([bedrooms])
+  @@index([status])
+  @@index([createdAt])
+  @@index([latitude, longitude])
+  // @@index([location], type: Gist) // Spatial index for PostGIS - add later
+  @@map("listings")
+}
+
+// Enum for listing status
+enum ListingStatus {
+  ACTIVE
+  INACTIVE
+  EXPIRED
+  RENTED
+  PENDING_REVIEW
+}
+
+// Geocoding cache for better performance
+model GeocodingCache {
+  id               String    @id @default(uuid())
+  address          String    @unique
+  latitude         Float
+  longitude        Float
+  district         String?
+  formattedAddress String?   @map("formatted_address")
+  confidence       Float?
+  createdAt        DateTime  @default(now()) @map("created_at")
+  updatedAt        DateTime  @updatedAt @map("updated_at")
+  lastUsedAt       DateTime  @default(now()) @map("last_used_at")
+
+  @@map("geocoding_cache")
+}
+
+// Parse job tracking for various parsing tasks
+model ParseJob {
+  id          String    @id @default(uuid())
+  type        String    // telegram_parse, ai_analysis, geocoding, listing_process
+  status      String    @default("pending") // pending, processing, completed, failed
+  data        Json?
+  result      Json?
+  error       String?
+  attempts    Int       @default(0)
+  maxAttempts Int       @default(3) @map("max_attempts")
+  processedAt DateTime? @map("processed_at")
+  completedAt DateTime? @map("completed_at")
+  createdAt   DateTime  @default(now()) @map("created_at")
+  updatedAt   DateTime  @updatedAt @map("updated_at")
+
+  @@index([status])
+  @@index([type])
+  @@index([createdAt])
+  @@map("parse_jobs")
+}
+
+// User sessions (for future auth if needed)
+model User {
+  id        String   @id @default(uuid())
+  email     String?  @unique
+  name      String?
+  role      UserRole @default(USER)
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  @@map("users")
+}
+
+// Enum for user roles
+enum UserRole {
+  USER
+  ADMIN
+  MODERATOR
+}
+
+// Analytics and metrics
+model Metric {
+  id        String   @id @default(uuid())
+  name      String
+  value     Float
+  metadata  Json?
+  timestamp DateTime @default(now())
+
+  @@index([name])
+  @@index([timestamp])
+  @@map("metrics")
+}
+
+// AI API usage tracking for cost monitoring
+model AiApiUsage {
+  id           String   @id @default(uuid())
+  provider     String   // openai, anthropic, etc.
+  model        String   // gpt-3.5-turbo, gpt-4, claude-3, etc.
+  inputTokens  Int      @map("input_tokens")
+  outputTokens Int      @map("output_tokens")
+  totalTokens  Int      @map("total_tokens")
+  cost         Float    // Cost in USD
+  requestId    String?  @map("request_id") // External API request ID if available
+  metadata     Json?    // Additional data like purpose, module, etc.
+  createdAt    DateTime @default(now()) @map("created_at")
+
+  @@index([provider])
+  @@index([model])
+  @@index([createdAt])
+  @@index([requestId])
+  @@map("ai_api_usage")
+}
+
+// AI Analysis cache for performance optimization
+model AiAnalysisCache {
+  id               String   @id @default(uuid())
+  textHash         String   @unique @map("text_hash") // SHA256 hash of the input text
+  isRental         Boolean  @map("is_rental")
+  confidence       Float
+  extractedData    Json     @map("extracted_data")
+  language         String
+  reasoning        String?
+  provider         String   // openai, deepseek, mock
+  model            String   // gpt-3.5-turbo, deepseek-chat, etc.
+  createdAt        DateTime @default(now()) @map("created_at")
+  updatedAt        DateTime @updatedAt @map("updated_at")
+  lastUsedAt       DateTime @default(now()) @map("last_used_at")
+  expiresAt        DateTime @map("expires_at") // Cache expiration (30 days by default)
+
+  @@index([textHash])
+  @@index([expiresAt])
+  @@index([provider])
+  @@map("ai_analysis_cache")
+}
